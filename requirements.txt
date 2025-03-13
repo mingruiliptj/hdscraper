@@ -1,0 +1,8 @@
+google-api-python-client==2.108.0
+Pillow==9.5.0
+requests==2.31.0
+beautifulsoup4==4.12.2
+duckduckgo-search==3.9.9
+selenium==4.15.2
+webdriver-manager==4.0.1
+tqdm==4.66.1 
