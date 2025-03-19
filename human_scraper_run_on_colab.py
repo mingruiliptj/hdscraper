@@ -1,57 +1,35 @@
-import nbformat as nbf
+"""
+# Human Image Scraper for LoRA Training
 
-notebook = nbf.v4.new_notebook()
+This Python script scrapes high-quality human images with face detection.
+It will create images with exact dimensions of 1024x1024, with faces centered.
+All images are saved to Google Drive for easy access.
 
-# Title cell
-markdown_cell = nbf.v4.new_markdown_cell("""
-# Human Image Scraper for Machine Learning Datasets
+## Instructions:
+1. Upload this to Google Colab
+2. Run the entire script
+3. Follow the prompts to specify keywords and image count
 
-This notebook allows you to scrape images of humans with various attributes to create training datasets.
-It has built-in face detection to center crops on faces, and produces 1024x1024 pixel images suitable for machine learning.
-All images are saved directly to your Google Drive in the structure: `/content/drive/MyDrive/Loras/[project_name]/dataset/`
-""")
+"""
 
-# Installation cell
-install_cell = nbf.v4.new_code_cell("""
-# Check if running in Colab
-import sys
-IN_COLAB = 'google.colab' in sys.modules
-print(f"Running in Google Colab: {IN_COLAB}")
-
-# Mount Google Drive
-if IN_COLAB:
-    from google.colab import drive
-    drive.mount('/content/drive')
-    print("Google Drive mounted at /content/drive")
-
+# -------- INSTALLATION SECTION --------
+# Uncomment and run this cell when using in Colab
+"""
 # Install required packages
-!pip install -q requests
-!pip install -q Pillow
-!pip install -q google-api-python-client
-!pip install -q duckduckgo-search
-!pip install -q tqdm
+!pip install -q requests Pillow duckduckgo_search tqdm numpy
 
-# Install face_recognition (more complex in Colab)
-if IN_COLAB:
-    print("Installing dependencies for face detection (CPU mode only to avoid CUDA errors)")
-    !apt-get -qq install -y libsm6 libxext6 libxrender-dev libglib2.0-0
-    # Force installing dlib without CUDA to avoid GPU errors
-    !pip install -q dlib
-    !pip install -q face_recognition
-else:
-    !pip install -q face_recognition
+# Install face_recognition dependencies (CPU-only mode)
+!apt-get -qq install -y libsm6 libxext6 libxrender-dev libglib2.0-0
+!pip install -q dlib
+!pip install -q face_recognition
 
-!pip install -q numpy
+# Display installed versions
+!pip list | grep -E "requests|Pillow|duckduckgo|tqdm|face|dlib|numpy"
 
-# Display versions for debugging
-!pip list | grep -E "requests|Pillow|google|duckduckgo|tqdm|face|numpy|dlib"
+print("\n⚠️ NOTE: Face detection is running in CPU-only mode to avoid CUDA/GPU errors")
+"""
 
-print("\\n⚠️ NOTE: Face detection is running in CPU-only mode to avoid CUDA/GPU errors")
-print("This is slower but more compatible with Google Colab environments")
-""")
-
-# Import cell
-import_cell = nbf.v4.new_code_cell("""
+# -------- IMPORTS SECTION --------
 import os
 # Force CPU-only mode for dlib/face_recognition
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -60,7 +38,6 @@ os.environ["DLIB_USE_CUDA"] = "0"  # Explicitly disable CUDA for dlib
 import requests
 from PIL import Image
 from io import BytesIO
-from googleapiclient.discovery import build
 from duckduckgo_search import DDGS
 import time
 from tqdm import tqdm
@@ -69,17 +46,18 @@ from concurrent.futures import ThreadPoolExecutor
 import logging
 import face_recognition
 import numpy as np
-from google.colab import files
 
-# Verify we're not using CUDA
+# Mount Google Drive (uncomment when using in Colab)
+"""
+from google.colab import drive
+drive.mount('/content/drive')
+"""
+
 print("Using CPU-only mode for face detection")
-""")
 
-# Class definition
-class_cell = nbf.v4.new_code_cell("""
+# -------- SCRAPER CLASS --------
 class ImageScraper:
-    def __init__(self, api_key=None):
-        self.google_api_key = api_key
+    def __init__(self):
         self.target_size = (1024, 1024)
         self.setup_logging()
 
@@ -278,44 +256,28 @@ class ImageScraper:
         
         self.logger.info(f"Total successfully downloaded images: {total_successful_downloads}")
         return total_successful_downloads
-""")
 
-# Create instance cell
-instance_cell = nbf.v4.new_code_cell("""
-# Create an instance of the scraper
-scraper = ImageScraper()
-""")
+# -------- MAIN EXECUTION --------
+def main():
+    print("=" * 80)
+    print("Human Image Scraper for LoRA Training")
+    print("This script will download high-quality human images with face detection.")
+    print("Images will be saved to your Google Drive in Loras/[project_name]/dataset/")
+    print("=" * 80)
+    
+    # Initialize the scraper
+    scraper = ImageScraper()
+    
+    # Set your parameters
+    main_keyword = input("Enter main keyword (e.g., 'human'): ")
+    sub_keywords = input("Enter sub-keywords separated by commas (e.g., 'profile, face, portrait'): ")
+    project_name = input("Enter project name (folder will be created in Google Drive): ")
+    num_images_per_keyword = int(input("Enter number of images to download per sub-keyword: "))
+    
+    # Start scraping
+    scraper.scrape_images(main_keyword, sub_keywords, project_name, num_images_per_keyword)
+    
+    print(f"\nImages saved to: /content/drive/MyDrive/Loras/{project_name}/dataset/")
 
-# Input parameters cell
-params_cell = nbf.v4.new_code_cell("""
-# Set parameters for image scraping
-main_keyword = input("Enter main keyword (e.g., 'human'): ")
-sub_keywords = input("Enter sub-keywords separated by commas (e.g., 'profile, face, portrait'): ")
-project_name = input("Enter project name (folder will be created in Google Drive): ")
-num_images_per_keyword = int(input("Enter number of images to download per sub-keyword: "))
-""")
-
-# Run scraper cell
-run_cell = nbf.v4.new_code_cell("""
-# Run the scraper
-total_images = scraper.scrape_images(main_keyword, sub_keywords, project_name, num_images_per_keyword)
-print(f"Total images downloaded: {total_images}")
-print(f"Images saved to: /content/drive/MyDrive/Loras/{project_name}/dataset/")
-""")
-
-# Add cells to notebook
-notebook.cells.extend([
-    markdown_cell,
-    install_cell,
-    import_cell,
-    class_cell,
-    instance_cell,
-    params_cell,
-    run_cell
-])
-
-# Write the notebook to a file
-with open('Human_Image_Scraper_Colab.ipynb', 'w', encoding='utf-8') as f:
-    nbf.write(notebook, f)
-
-print("Notebook created successfully: Human_Image_Scraper_Colab.ipynb") 
+if __name__ == "__main__":
+    main() 
