@@ -1,12 +1,21 @@
 """
 # Human Image Scraper with MediaPipe Face Detection for Google Colab
-# Run this file in Google Colab with: %run HS_Colab_Fixed.py
+
+## How to use this script:
+1. Upload this file to Google Colab
+2. Create a new code cell in your Colab notebook
+3. Run the following command in that cell:
+   %run HS_Colab_Fixed.py
+
+This script automatically uses MediaPipe for face detection, which is more reliable
+in Colab than dlib/face_recognition and avoids installation issues.
 """
 
 def setup_environment():
     """Run this function to set up the environment"""
     import os
     import sys
+    import subprocess
     
     # Check if in Colab
     IN_COLAB = 'google.colab' in sys.modules
@@ -17,17 +26,24 @@ def setup_environment():
     print("Setting up environment for MediaPipe face detection...")
     
     # Install basic dependencies - keeping it minimal
-    !pip install -q requests Pillow duckduckgo_search tqdm
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", 
+                          "requests", "Pillow", "duckduckgo_search", "tqdm"])
     
     # Install OpenCV and MediaPipe for face detection
     # These are much more reliable in Colab than dlib/face_recognition
-    !pip install -q opencv-python-headless mediapipe
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", 
+                          "opencv-python-headless", "mediapipe"])
     
     # Mount Google Drive
-    from google.colab import drive
-    drive.mount('/content/drive')
+    if IN_COLAB:
+        try:
+            from google.colab import drive
+            drive.mount('/content/drive')
+        except Exception as e:
+            print(f"Error mounting Google Drive: {e}")
+            print("You may need to run this in a Colab notebook instead.")
     
-    print("✓ Setup complete - MediaPipe face detection is ready")
+    print("Setup complete - MediaPipe face detection is ready")
     return True
 
 def run_scraper():

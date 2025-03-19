@@ -1,0 +1,11 @@
+# Copy this code into a new code cell in Google Colab
+
+# Download the script directly into Colab
+!wget -q https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/HS_Colab_Fixed.py -O HS_Colab_Fixed.py
+
+# Run the script using IPython's %run magic command
+%run HS_Colab_Fixed.py
+
+# If you downloaded the script manually and uploaded it to Colab
+# Just run the following line:
+# %run HS_Colab_Fixed.py 
