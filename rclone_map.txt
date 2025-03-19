@@ -1,0 +1,9 @@
+sudo apt update
+sudo apt install -y fuse3
+
+curl https://rclone.org/install.sh | sudo bash
+
+sudo sed -i 's/#user_allow_other/user_allow_other/' /etc/fuse.conf	
+
+
+rclone mount gdrive: ~/google-drive --allow-other &
