@@ -17,14 +17,21 @@ import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["DLIB_USE_CUDA"] = "0"
 
-# Install dependencies
+# Install basic dependencies first
 !pip install -q requests Pillow duckduckgo_search tqdm numpy
-!apt-get -qq install -y libsm6 libxext6 libxrender-dev libglib2.0-0
-!pip install -q cmake
-# Remove any existing dlib/face_recognition installations
+
+# Install system dependencies 
+!apt-get -qq update
+!apt-get -qq install -y libsm6 libxext6 libxrender-dev libglib2.0-0 cmake
+
+# Remove any existing installations
 !pip uninstall -y dlib face_recognition
-# Reinstall with specific version known to work
-!pip install -q dlib==19.24.1 --no-cache-dir
+
+# IMPORTANT: Install pre-built wheels to avoid compilation freezes
+print("Installing pre-built dlib wheel...")
+!pip install -q https://github.com/z-mahmud22/Dlib_Windows_Python/raw/main/dlib-19.22.99-cp310-cp310-win_amd64.whl || pip install -q dlib==19.22.1
+
+print("Installing face_recognition...")
 !pip install -q face_recognition
 
 # Verify installation
@@ -33,6 +40,18 @@ os.environ["DLIB_USE_CUDA"] = "0"
 # Mount Google Drive
 from google.colab import drive
 drive.mount('/content/drive')
+
+# Verify dlib can be imported without CUDA issues
+try:
+    import dlib
+    dlib.DLIB_USE_CUDA = False
+    import face_recognition
+    print("✅ Face recognition loaded successfully in CPU-only mode")
+except Exception as e:
+    print(f"❌ Error: {e}")
+    print("If the pre-built wheel didn't work, try running this alternative method:")
+    print("!pip install -q dlib==19.22.1")
+    print("!pip install -q face_recognition")
 
 print("✅ Setup complete - Now run the main script cell")
 """
