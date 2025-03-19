@@ -16,47 +16,86 @@ def setup_environment():
     import os
     import sys
     import subprocess
+    import platform
     
     print("\n========== Setting Up Environment ==========")
     print("This may take a few minutes...")
     
-    # Clean up any potentially conflicting packages
-    print("Removing potentially conflicting packages...")
-    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", 
-                   "numpy", "opencv-python", "opencv-python-headless", 
-                   "mediapipe", "duckduckgo_search"], 
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # Check Python version
+    python_version = sys.version_info
+    print(f"Python version: {python_version.major}.{python_version.minor}.{python_version.micro}")
     
-    # First install NumPy (critical for compatibility)
-    print("Installing NumPy...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "numpy==1.24.3"])
-    
-    # Install basic dependencies
-    print("Installing basic dependencies...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", 
-                          "requests", "Pillow", "tqdm"])
-    
-    # Install OpenCV first, then mediapipe
-    print("Installing OpenCV...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "opencv-python-headless==4.8.0.76"])
-    
-    print("Installing MediaPipe...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "mediapipe==0.10.8"])
-    
-    # Install DuckDuckGo search
-    print("Installing DuckDuckGo search library...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "duckduckgo_search==3.9.6"])
+    if python_version.major == 3 and python_version.minor >= 13:
+        print("\nWARNING: Python 3.13+ detected. Some packages like mediapipe may not be compatible.")
+        print("Consider using Python 3.10-3.12 for full compatibility.")
+        
+        user_choice = input("Continue with limited functionality? (y/n): ")
+        if user_choice.lower() != 'y':
+            print("Setup aborted. Please use a compatible Python version (3.10-3.12 recommended).")
+            return False
+            
+        # For newer Python versions, try to install compatible packages
+        print("Installing compatible packages for Python 3.13+...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", 
+                                  "numpy>=2.1.0", "opencv-python-headless>=4.8.0", 
+                                  "requests", "Pillow", "tqdm", "duckduckgo-search>=3.9.6"])
+            print("Note: MediaPipe is not available for Python 3.13+. Face detection will be limited.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error installing packages: {e}")
+            return False
+    else:
+        # Clean up any potentially conflicting packages
+        print("Removing potentially conflicting packages...")
+        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", 
+                       "numpy", "opencv-python", "opencv-python-headless", 
+                       "mediapipe", "duckduckgo_search"], 
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # First install NumPy (critical for compatibility)
+        print("Installing NumPy...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "numpy==1.24.3"])
+        
+        # Install basic dependencies
+        print("Installing basic dependencies...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", 
+                              "requests", "Pillow", "tqdm"])
+        
+        # Install OpenCV first, then mediapipe
+        print("Installing OpenCV...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "opencv-python-headless==4.8.0.76"])
+        
+        print("Installing MediaPipe...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "mediapipe==0.10.8"])
+        
+        # Install DuckDuckGo search
+        print("Installing DuckDuckGo search library...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "duckduckgo_search==3.9.6"])
     
     # Verify installations
     try:
         import numpy
         import cv2
-        import mediapipe
-        from duckduckgo_search import DDGS
-        print("\n✓ All dependencies installed successfully!")
         print(f"NumPy version: {numpy.__version__}")
         print(f"OpenCV version: {cv2.__version__}")
-        print(f"MediaPipe version: {mediapipe.__version__}")
+        
+        try:
+            import mediapipe
+            print(f"MediaPipe version: {mediapipe.__version__}")
+            has_mediapipe = True
+        except ImportError:
+            print("MediaPipe not available on this Python version.")
+            has_mediapipe = False
+            
+        try:
+            from duckduckgo_search import DDGS
+            print("DuckDuckGo search library installed.")
+        except ImportError as e:
+            print(f"Error importing duckduckgo_search: {e}")
+            print("Try installing with: pip install duckduckgo-search")
+            return False
+            
+        print("\n✓ Dependencies installed successfully!")
     except ImportError as e:
         print(f"Error importing a dependency: {e}")
         return False
@@ -69,7 +108,9 @@ def setup_environment():
         print(f"\nWarning: Google Drive path not found at {gdrive_path}")
         print("Please ensure the Google Drive is properly mounted")
     
-    print("\nSetup complete - MediaPipe face detection is ready!")
+    print("\nSetup complete!")
+    if not has_mediapipe:
+        print("NOTE: MediaPipe is not available. Face detection will be limited.")
     print("Please run the script again and select option 2 to scrape images.")
     return True
 
@@ -80,7 +121,6 @@ def run_scraper():
         import requests
         from PIL import Image
         from io import BytesIO
-        from duckduckgo_search import DDGS
         import time
         from tqdm import tqdm 
         import hashlib
@@ -88,7 +128,30 @@ def run_scraper():
         import logging
         import numpy as np
         import cv2
-        import mediapipe as mp
+        
+        # Check if mediapipe is available
+        try:
+            import mediapipe as mp
+            mp_face_detection = mp.solutions.face_detection
+            face_detection = mp_face_detection.FaceDetection(
+                model_selection=1,  # 0 for short range, 1 for long range
+                min_detection_confidence=0.5
+            )
+            has_mediapipe = True
+        except ImportError:
+            print("MediaPipe not available. Using fallback face detection.")
+            has_mediapipe = False
+            
+        try:
+            from duckduckgo_search import DDGS
+        except ImportError:
+            try:
+                # Try alternative import style
+                from duckduckgo_search.duckduckgo_search import DDGS
+            except ImportError:
+                print("Error: DuckDuckGo search library not found.")
+                print("Please run setup option 1 first.")
+                return False
         
         # If we made it here, imports are successful
         print("\nAll dependencies loaded successfully!")
@@ -97,17 +160,11 @@ def run_scraper():
         print("Please run option 1 first to set up the environment.")
         return False
     
-    # Initialize MediaPipe face detection
-    mp_face_detection = mp.solutions.face_detection
-    face_detection = mp_face_detection.FaceDetection(
-        model_selection=1,  # 0 for short range, 1 for long range
-        min_detection_confidence=0.5
-    )
-    
     class ImageScraper:
         def __init__(self):
             self.target_size = (1024, 1024)
             self.setup_logging()
+            self.has_mediapipe = has_mediapipe
 
         def setup_logging(self):
             logging.basicConfig(
@@ -169,8 +226,13 @@ def run_scraper():
                 return image.resize((new_width, new_height), Image.BICUBIC)
 
         def crop_around_face(self, image):
-            """Crop image to 1024x1024 keeping faces centered using MediaPipe"""
+            """Crop image to 1024x1024 keeping faces centered using MediaPipe if available"""
             try:
+                # If mediapipe is not available, fall back to center crop
+                if not self.has_mediapipe:
+                    self.logger.debug("MediaPipe not available, using center crop")
+                    return self.crop_center(image)
+                
                 # Convert PIL Image to CV2 format
                 img_array = np.array(image)
                 
