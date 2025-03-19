@@ -1,43 +1,47 @@
 """
-# Human Image Scraper for LoRA Training
+# Human Image Scraper for LoRA Training - CUDA ERROR FIXED VERSION
 
-This Python script scrapes high-quality human images with face detection.
-It will create images with exact dimensions of 1024x1024, with faces centered.
-All images are saved to Google Drive for easy access.
+This script scrapes high-quality human images with face detection using CPU-only mode.
+It will download images and create 1024x1024 crops centered on faces.
+All images are saved to Google Drive.
 
-## Instructions:
-1. Upload this to Google Colab
-2. Run the entire script
-3. Follow the prompts to specify keywords and image count
-
+## IMPORTANT: Run the setup cell FIRST to avoid CUDA errors
 """
 
-# -------- INSTALLATION SECTION --------
-# Uncomment and run this cell when using in Colab
+# -------------------------------------------------
+# SETUP CELL - RUN THIS FIRST IN COLAB
+# -------------------------------------------------
 """
-# First, disable CUDA for dlib
+# Set environment variables before imports
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["DLIB_USE_CUDA"] = "0"
 
-# Install required packages
+# Install dependencies
 !pip install -q requests Pillow duckduckgo_search tqdm numpy
-
-# Install face_recognition dependencies (CPU-only mode)
 !apt-get -qq install -y libsm6 libxext6 libxrender-dev libglib2.0-0
-!pip uninstall -y dlib face_recognition
 !pip install -q cmake
-!pip install -q dlib==19.24.1 --no-cache-dir --force-reinstall
+# Remove any existing dlib/face_recognition installations
+!pip uninstall -y dlib face_recognition
+# Reinstall with specific version known to work
+!pip install -q dlib==19.24.1 --no-cache-dir
 !pip install -q face_recognition
 
-# Display installed versions
-!pip list | grep -E "requests|Pillow|duckduckgo|tqdm|face|dlib|numpy"
+# Verify installation
+!pip list | grep -E "dlib|face"
 
-print("\n⚠️ NOTE: Face detection is running in CPU-only mode to avoid CUDA/GPU errors")
+# Mount Google Drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+print("✅ Setup complete - Now run the main script cell")
 """
 
-# -------- IMPORTS SECTION --------
-# Force CPU-only mode for dlib/face_recognition
+# -------------------------------------------------
+# MAIN SCRIPT - RUN THIS AFTER THE SETUP CELL
+# -------------------------------------------------
+
+# Critical: Set environment variables before ANY imports
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 os.environ["DLIB_USE_CUDA"] = "0"
@@ -51,31 +55,20 @@ from tqdm import tqdm
 import hashlib
 from concurrent.futures import ThreadPoolExecutor
 import logging
-
-# Special handling for face_recognition to avoid CUDA errors
-try:
-    import dlib
-    dlib.DLIB_USE_CUDA = False
-    import face_recognition
-    print("Face recognition imported successfully in CPU-only mode")
-except RuntimeError as e:
-    print(f"Error importing face_recognition: {e}")
-    print("\nPlease run the installation section first and make sure to set CUDA_VISIBLE_DEVICES=-1")
-    # Exit early to prevent further errors
-    import sys
-    sys.exit(1)
-
 import numpy as np
 
-# Mount Google Drive (uncomment when using in Colab)
-"""
-from google.colab import drive
-drive.mount('/content/drive')
-"""
+# Import dlib first and configure it to not use CUDA
+try:
+    import dlib
+    # Override dlib's CUDA detection
+    dlib.DLIB_USE_CUDA = False
+    import face_recognition
+    print("✅ Face recognition loaded successfully in CPU-only mode")
+except Exception as e:
+    print(f"❌ Error loading face_recognition: {e}")
+    print("Please run the setup cell first and ensure CUDA environment variables are set correctly")
+    raise
 
-print("Using CPU-only mode for face detection")
-
-# -------- SCRAPER CLASS --------
 class ImageScraper:
     def __init__(self):
         self.target_size = (1024, 1024)
@@ -140,9 +133,17 @@ class ImageScraper:
         # Convert PIL Image to numpy array for face_recognition
         img_array = np.array(image)
         
-        # Force CPU mode for face detection to avoid CUDA errors
-        # Detect faces - model='hog' forces CPU usage instead of CNN/GPU
-        face_locations = face_recognition.face_locations(img_array, model='hog')
+        try:
+            # Explicitly use the HOG-based model which is CPU-only
+            # Use lower upsample value for better performance
+            face_locations = face_recognition.face_locations(
+                img_array, 
+                model='hog',  # Always use HOG (CPU) model, never CNN
+                number_of_times_to_upsample=1  # Lower value = faster but may miss small faces
+            )
+        except Exception as e:
+            self.logger.error(f"Face detection error: {e}")
+            return self.crop_center(image)
         
         if not face_locations:
             # If no faces detected, fall back to center crop
@@ -277,10 +278,10 @@ class ImageScraper:
         self.logger.info(f"Total successfully downloaded images: {total_successful_downloads}")
         return total_successful_downloads
 
-# -------- MAIN EXECUTION --------
-def main():
+# Main execution
+if __name__ == "__main__":
     print("=" * 80)
-    print("Human Image Scraper for LoRA Training")
+    print("Human Image Scraper for LoRA Training (CPU-only version)")
     print("This script will download high-quality human images with face detection.")
     print("Images will be saved to your Google Drive in Loras/[project_name]/dataset/")
     print("=" * 80)
@@ -297,7 +298,4 @@ def main():
     # Start scraping
     scraper.scrape_images(main_keyword, sub_keywords, project_name, num_images_per_keyword)
     
-    print(f"\nImages saved to: /content/drive/MyDrive/Loras/{project_name}/dataset/")
-
-if __name__ == "__main__":
-    main() 
+    print(f"\nImages saved to: /content/drive/MyDrive/Loras/{project_name}/dataset/") 
