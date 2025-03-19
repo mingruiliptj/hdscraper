@@ -1,18 +1,21 @@
 """
 # Human Image Scraper with MediaPipe Face Detection for Google Colab
+# This version fixes the NumPy binary incompatibility error
 
-## How to use this script:
+To use this script in Google Colab:
 1. Upload this file to Google Colab
-2. Create a new code cell in your Colab notebook
-3. Run the following command in that cell:
-   %run HS_Colab_Fixed.py
+2. Run in a code cell: %run mediapipe_scraper.py
+3. Choose option 1 to set up the environment
+4. Once setup is complete, run the script again and choose option 2
 
-This script automatically uses MediaPipe for face detection, which is more reliable
-in Colab than dlib/face_recognition and avoids installation issues.
+This script handles:
+- NumPy version incompatibility issues
+- Binary dependency conflicts in Colab
+- Proper package installation order
 """
 
 def setup_environment():
-    """Run this function to set up the environment"""
+    """Set up the environment with proper dependency installation order"""
     import os
     import sys
     import subprocess
@@ -22,71 +25,92 @@ def setup_environment():
     if not IN_COLAB:
         print("Warning: This script is designed for Google Colab")
         return False
+        
+    print("\n========== Setting Up Environment ==========")
+    print("This may take a few minutes...")
     
-    print("Setting up environment for MediaPipe face detection...")
+    # Clean up any potentially conflicting packages
+    print("Removing potentially conflicting packages...")
+    subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", 
+                   "numpy", "opencv-python", "opencv-python-headless", 
+                   "mediapipe", "duckduckgo_search"], 
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
-    # First, ensure we have a compatible NumPy version
-    # This helps avoid the "numpy.dtype size changed" error
-    print("Installing/upgrading NumPy to ensure compatibility...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "-q", "numpy"])
+    # First install NumPy (critical for compatibility)
+    print("Installing NumPy...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "numpy==1.24.3"])
     
-    # Install dependencies in a specific order to avoid conflicts
-    print("Installing other dependencies...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "requests", "Pillow"])
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "tqdm"])
+    # Install basic dependencies
+    print("Installing basic dependencies...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", 
+                          "requests", "Pillow", "tqdm"])
     
-    # Install OpenCV first, then mediapipe (ensures compatibility)
-    print("Installing OpenCV and MediaPipe for face detection...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "opencv-python-headless"])
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "mediapipe"])
+    # Install OpenCV first, then mediapipe
+    print("Installing OpenCV...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "opencv-python-headless==4.8.0.76"])
     
-    # Install DDGS last to avoid version conflicts
+    print("Installing MediaPipe...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "mediapipe==0.10.8"])
+    
+    # Install DuckDuckGo search
     print("Installing DuckDuckGo search library...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "duckduckgo_search"])
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "duckduckgo_search==3.9.6"])
     
     # Verify installations
     try:
-        import numpy as np
+        import numpy
         import cv2
-        import mediapipe as mp
+        import mediapipe
         from duckduckgo_search import DDGS
-        print("✓ All dependencies installed successfully!")
+        print("\n✓ All dependencies installed successfully!")
+        print(f"NumPy version: {numpy.__version__}")
+        print(f"OpenCV version: {cv2.__version__}")
+        print(f"MediaPipe version: {mediapipe.__version__}")
     except ImportError as e:
         print(f"Error importing a dependency: {e}")
         return False
     
     # Mount Google Drive
-    if IN_COLAB:
-        try:
-            from google.colab import drive
-            drive.mount('/content/drive')
-        except Exception as e:
-            print(f"Error mounting Google Drive: {e}")
-            print("You may need to run this in a Colab notebook instead.")
+    try:
+        from google.colab import drive
+        drive.mount('/content/drive')
+        print("Google Drive mounted successfully")
+    except Exception as e:
+        print(f"Error mounting Google Drive: {e}")
+        print("Please ensure you're running this in Google Colab")
     
-    print("Setup complete - MediaPipe face detection is ready")
+    print("\nSetup complete - MediaPipe face detection is ready!")
+    print("Please run the script again and select option 2 to scrape images.")
     return True
 
 def run_scraper():
-    """Main function to scrape and process images"""
-    import os
-    import requests
-    from PIL import Image
-    from io import BytesIO
-    from duckduckgo_search import DDGS
-    import time
-    from tqdm import tqdm
-    import hashlib
-    from concurrent.futures import ThreadPoolExecutor
-    import logging
-    import numpy as np
-    import cv2
-    import mediapipe as mp
+    """Run the image scraper with MediaPipe face detection"""
+    try:
+        import os
+        import requests
+        from PIL import Image
+        from io import BytesIO
+        from duckduckgo_search import DDGS
+        import time
+        from tqdm.notebook import tqdm
+        import hashlib
+        from concurrent.futures import ThreadPoolExecutor
+        import logging
+        import numpy as np
+        import cv2
+        import mediapipe as mp
+        
+        # If we made it here, imports are successful
+        print("\nAll dependencies loaded successfully!")
+    except ImportError as e:
+        print(f"Error importing dependencies: {e}")
+        print("Please run option 1 first to set up the environment.")
+        return False
     
     # Initialize MediaPipe face detection
     mp_face_detection = mp.solutions.face_detection
     face_detection = mp_face_detection.FaceDetection(
-        model_selection=1,  # 0 for shorter-range detection, 1 for longer-range
+        model_selection=1,  # 0 for short range, 1 for long range
         min_detection_confidence=0.5
     )
     
@@ -147,54 +171,64 @@ def run_scraper():
                 new_height = target_size[1]
                 new_width = int(new_height * aspect_ratio)
                 
-            return image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            return image.resize((new_width, new_height), Image.LANCZOS)
 
         def crop_around_face(self, image):
             """Crop image to 1024x1024 keeping faces centered using MediaPipe"""
-            # Convert PIL Image to CV2 format
-            img_array = np.array(image)
-            img_rgb = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
-            
-            # Process with MediaPipe
-            img_rgb = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2RGB)
-            results = face_detection.process(img_rgb)
-            
-            if not results.detections:
-                # If no faces detected, fall back to center crop
+            try:
+                # Convert PIL Image to CV2 format
+                img_array = np.array(image)
+                
+                # Handle grayscale images by converting to RGB
+                if len(img_array.shape) == 2:
+                    img_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2RGB)
+                    
+                # Convert to RGB for MediaPipe (it expects RGB)
+                if img_array.shape[2] == 4:  # RGBA
+                    img_array = img_array[:, :, :3]  # Drop alpha channel
+                
+                # Process with MediaPipe
+                results = face_detection.process(img_array)
+                
+                if not results.detections:
+                    # If no faces detected, fall back to center crop
+                    return self.crop_center(image)
+                    
+                # Calculate the center point of all faces
+                height, width = img_array.shape[:2]
+                centers = []
+                
+                for detection in results.detections:
+                    # Get bounding box
+                    bbox = detection.location_data.relative_bounding_box
+                    x = int(bbox.xmin * width)
+                    y = int(bbox.ymin * height)
+                    w = int(bbox.width * width)
+                    h = int(bbox.height * height)
+                    
+                    # Calculate center of face
+                    center_x = x + w // 2
+                    center_y = y + h // 2
+                    centers.append((center_x, center_y))
+                    
+                # Use the average center point of all faces
+                center_x = int(sum(x for x, _ in centers) / len(centers))
+                center_y = int(sum(y for _, y in centers) / len(centers))
+                
+                # Calculate crop box
+                img_width, img_height = image.size
+                crop_size = 1024
+                
+                # Ensure the crop box stays within image boundaries
+                left = max(0, min(center_x - crop_size // 2, img_width - crop_size))
+                top = max(0, min(center_y - crop_size // 2, img_height - crop_size))
+                right = left + crop_size
+                bottom = top + crop_size
+                
+                return image.crop((left, top, right, bottom))
+            except Exception as e:
+                self.logger.error(f"Error in face detection: {e}")
                 return self.crop_center(image)
-                
-            # Calculate the center point of all faces
-            height, width, _ = img_rgb.shape
-            centers = []
-            
-            for detection in results.detections:
-                # Get bounding box
-                bbox = detection.location_data.relative_bounding_box
-                x = int(bbox.xmin * width)
-                y = int(bbox.ymin * height)
-                w = int(bbox.width * width)
-                h = int(bbox.height * height)
-                
-                # Calculate center of face
-                center_x = x + w // 2
-                center_y = y + h // 2
-                centers.append((center_x, center_y))
-                
-            # Use the average center point of all faces
-            center_x = int(sum(x for x, _ in centers) / len(centers))
-            center_y = int(sum(y for _, y in centers) / len(centers))
-            
-            # Calculate crop box
-            img_width, img_height = image.size
-            crop_size = 1024
-            
-            # Ensure the crop box stays within image boundaries
-            left = max(0, min(center_x - crop_size // 2, img_width - crop_size))
-            top = max(0, min(center_y - crop_size // 2, img_height - crop_size))
-            right = left + crop_size
-            bottom = top + crop_size
-            
-            return image.crop((left, top, right, bottom))
 
         def process_image(self, image_url, save_path, index):
             try:
@@ -286,15 +320,14 @@ def run_scraper():
                 # Process images with progress bar
                 successful_downloads = 0
                 with tqdm(total=num_images_per_keyword, desc=f"Processing '{sub_keyword}'") as pbar:
-                    with ThreadPoolExecutor(max_workers=4) as executor:
-                        for i, url in enumerate(image_urls):
-                            if successful_downloads >= num_images_per_keyword:
-                                break
-                                
-                            if self.process_image(url, save_path, f"{sub_keyword}_{i}"):
-                                successful_downloads += 1
-                                total_successful_downloads += 1
-                                pbar.update(1)
+                    for i, url in enumerate(image_urls):
+                        if successful_downloads >= num_images_per_keyword:
+                            break
+                            
+                        if self.process_image(url, save_path, f"{sub_keyword}_{i}"):
+                            successful_downloads += 1
+                            total_successful_downloads += 1
+                            pbar.update(1)
 
                 self.logger.info(f"Downloaded {successful_downloads} images for '{search_query}'")
             
@@ -320,9 +353,10 @@ def run_scraper():
     scraper.scrape_images(main_keyword, sub_keywords, project_name, num_images_per_keyword)
     
     print(f"\nImages saved to: /content/drive/MyDrive/Loras/{project_name}/dataset/")
+    return True
 
 if __name__ == "__main__":
-    print("\nHuman Image Scraper for Google Colab")
+    print("\n========== Human Image Scraper for Google Colab ==========")
     print("1. Set up the environment (do this first)")
     print("2. Run the image scraper (do this after setup)")
     

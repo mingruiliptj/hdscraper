@@ -1,48 +1,62 @@
-# Buddhist Image Scraper for LoRA Training
+# Human Image Scraper for Google Colab
 
-This script scrapes high-quality Buddhist-themed images and processes them to be suitable for LoRA training.
+A tool to automatically download high-quality images of human subjects, process them to 1024x1024 resolution, detect faces, and save them to Google Drive.
 
 ## Features
-- Scrapes only high-resolution images (larger than 1200x1200)
-- Crops images to exactly 1024x1024 from the center
-- No resizing of smaller images (they are skipped)
-- Maintains image quality with center cropping
-- Multi-threaded downloading
-- Progress bar and detailed logging
 
-## Setup
+- Downloads high-resolution images of human subjects using DuckDuckGo search
+- Processes images to exactly 1024x1024 pixels while maintaining aspect ratio
+- Uses MediaPipe for fast and reliable face detection
+- Centers crops on detected faces whenever possible
+- Saves processed images to Google Drive
+- Compatible with Google Colab
+- **Fixes NumPy binary incompatibility issues** commonly encountered in Colab
 
-1. Navigate to your virtual environment directory:
-```bash
-cd C:\ws\myloraenv\.venv
-```
+## How to Use in Google Colab
 
-2. Activate the virtual environment:
-```bash
-# On Windows
-Scripts\activate
-```
+### Option 1: Use the Notebook
 
-3. Install requirements:
-```bash
-pip install -r requirements.txt
-```
+1. Upload `human_images_notebook.ipynb` to Google Colab
+2. Run the notebook
+3. Follow the prompts to set up the environment and run the scraper
 
-## Usage
+### Option 2: Use the Python Script
 
-1. Make sure your virtual environment is activated
-2. Run the script:
-```bash
-python image_scraper.py
-```
+1. Upload `mediapipe_scraper.py` to Google Colab
+2. Run the following command in a code cell:
+   ```python
+   %run mediapipe_scraper.py
+   ```
+3. Choose option 1 to set up the environment (do this first)
+4. After setup is complete, run the script again and choose option 2
+5. Enter your search parameters:
+   - Main keyword (e.g., "human")
+   - Sub-keywords (e.g., "profile, face, portrait")
+   - Project name (for the folder in Google Drive)
+   - Number of images per sub-keyword
 
-3. When prompted, enter:
-   - Search keyword (will be combined with "buddhism")
-   - Save folder name
-   - Number of images to download
+## Technical Notes
 
-## Notes
-- Only images larger than 1200x1200 pixels will be processed
-- Images are center-cropped to exactly 1024x1024
-- Smaller images are automatically skipped
-- All images are saved in high-quality JPEG format 
+- The script uses MediaPipe instead of dlib/face_recognition for face detection
+  - This avoids installation issues in Google Colab
+  - Provides reliable face detection without CUDA dependencies
+- Specific versions of NumPy and OpenCV are installed to avoid binary incompatibility
+- Images are saved to: `/content/drive/MyDrive/Loras/[project_name]/dataset/`
+- Only images with a minimum resolution of 1024x1024 pixels are processed
+
+## Files Included
+
+- `mediapipe_scraper.py` - Main script with NumPy binary compatibility fixes
+- `colab_setup_cell.txt` - Code cell you can copy into Colab to download and run the script
+- `human_images_notebook.ipynb` - Ready-to-use Colab notebook
+
+## Requirements
+
+The script automatically installs all required dependencies:
+- requests
+- Pillow
+- tqdm
+- duckduckgo_search
+- numpy (specific version 1.24.3)
+- opencv-python-headless (specific version 4.8.0.76)
+- mediapipe 

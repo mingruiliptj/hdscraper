@@ -1,11 +1,19 @@
-# Copy this code into a new code cell in Google Colab
+# Human Image Scraper for Google Colab - Setup Cell
+# Copy and paste this entire cell into a Google Colab notebook, then run it.
 
 # Download the script directly into Colab
-!wget -q https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/HS_Colab_Fixed.py -O HS_Colab_Fixed.py
+!wget -q https://raw.githubusercontent.com/yourusername/your-repo/main/mediapipe_scraper.py -O mediapipe_scraper.py
 
-# Run the script using IPython's %run magic command
-%run HS_Colab_Fixed.py
+# If you prefer to upload the file manually instead:
+# 1. First download the mediapipe_scraper.py file to your computer
+# 2. Click on the folder icon in Colab's left sidebar
+# 3. Upload the file
+# 4. Then uncomment and run: # %run mediapipe_scraper.py
 
-# If you downloaded the script manually and uploaded it to Colab
-# Just run the following line:
-# %run HS_Colab_Fixed.py 
+# Run the script (after downloading)
+%run mediapipe_scraper.py
+
+# Note: 
+# 1. Choose option 1 in the prompt to set up the environment
+# 2. After setup completes, run the script again and choose option 2
+# 3. Images will be saved to your Google Drive in the folder: /Loras/[project_name]/dataset/ 
