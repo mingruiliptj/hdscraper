@@ -77,7 +77,7 @@ def setup_environment():
         
         # Install DuckDuckGo search
         print("Installing DuckDuckGo search library...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "duckduckgo_search==3.9.6"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "duckduckgo-search>=4.1.1"])
     else:
         # Clean up any potentially conflicting packages
         print("Removing potentially conflicting packages...")
@@ -104,7 +104,7 @@ def setup_environment():
         
         # Install DuckDuckGo search
         print("Installing DuckDuckGo search library...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "duckduckgo_search==3.9.6"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "duckduckgo-search>=4.1.1"])
     
     # Verify installations
     try:
@@ -373,15 +373,38 @@ def run_scraper():
             image_urls = []
             try:
                 with DDGS() as ddgs:
-                    results = ddgs.images(
+                    try:
+                        # Try the new API style first
+                        results = list(ddgs.images(
+                            keyword,
+                            max_results=max_results * 3  # Get more results since we're being more selective
+                        ))
+                        for r in results:
+                            if r['image']:
+                                image_urls.append(r['image'])
+                    except TypeError:
+                        # Fall back to older API style if needed
+                        results = ddgs.images(
+                            keywords=keyword,
+                            max_results=max_results * 3
+                        )
+                        for r in results:
+                            if r['image']:
+                                image_urls.append(r['image'])
+            except Exception as e:
+                self.logger.error(f"Error searching DuckDuckGo: {str(e)}")
+                # Try alternative method without context manager
+                try:
+                    ddgs = DDGS()
+                    results = list(ddgs.images(
                         keyword,
-                        max_results=max_results * 3  # Get more results since we're being more selective
-                    )
+                        max_results=max_results * 3
+                    ))
                     for r in results:
                         if r['image']:
                             image_urls.append(r['image'])
-            except Exception as e:
-                self.logger.error(f"Error searching DuckDuckGo: {str(e)}")
+                except Exception as e2:
+                    self.logger.error(f"Alternative method also failed: {str(e2)}")
             return image_urls
 
         def scrape_images(self, main_keyword, sub_keywords, project_name, num_images_per_keyword):
