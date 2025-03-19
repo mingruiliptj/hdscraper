@@ -1,225 +1,124 @@
-import json
+import nbformat as nbf
+import re
 
-notebook = {
-    "cells": [
-        {
-            "cell_type": "markdown",
-            "metadata": {},
-            "source": [
-                "# Buddhist Image Scraper for LoRA Training\n",
-                "\n",
-                "This notebook scrapes high-quality Buddhist-themed images and processes them to be suitable for LoRA training.\n",
-                "The script will download images larger than 1200x1200 and crop them to exactly 1024x1024 from the center.\n",
-                "Images will be saved in your Google Drive under Loras/[project_name]/dataset/"
-            ]
-        },
-        {
-            "cell_type": "code",
-            "metadata": {},
-            "execution_count": None,
-            "source": [
-                "# Install required packages\n",
-                "!pip install requests Pillow duckduckgo_search tqdm"
-            ]
-        },
-        {
-            "cell_type": "code",
-            "metadata": {},
-            "execution_count": None,
-            "source": [
-                "import os\n",
-                "import requests\n",
-                "from PIL import Image\n",
-                "from io import BytesIO\n",
-                "from duckduckgo_search import DDGS\n",
-                "import time\n",
-                "from tqdm.notebook import tqdm\n",
-                "import hashlib\n",
-                "from concurrent.futures import ThreadPoolExecutor\n",
-                "import logging\n",
-                "\n",
-                "# Mount Google Drive to save images\n",
-                "from google.colab import drive\n",
-                "drive.mount('/content/drive')"
-            ]
-        },
-        {
-            "cell_type": "code",
-            "metadata": {},
-            "execution_count": None,
-            "source": [
-                "class ImageScraper:\n",
-                "    def __init__(self):\n",
-                "        self.target_size = (1024, 1024)\n",
-                "        self.setup_logging()\n",
-                "\n",
-                "    def setup_logging(self):\n",
-                "        logging.basicConfig(\n",
-                "            level=logging.INFO,\n",
-                "            format='%(asctime)s - %(levelname)s - %(message)s'\n",
-                "        )\n",
-                "        self.logger = logging.getLogger(__name__)\n",
-                "\n",
-                "    def create_save_directory(self, project_name):\n",
-                "        # Create directory structure: Loras/project_name/dataset\n",
-                "        save_path = os.path.join('/content/drive/MyDrive/Loras', project_name, 'dataset')\n",
-                "        os.makedirs(save_path, exist_ok=True)\n",
-                "        return save_path\n",
-                "\n",
-                "    def crop_center(self, image):\n",
-                "        width, height = image.size\n",
-                "        \n",
-                "        # Calculate dimensions for center crop\n",
-                "        if width > height:\n",
-                "            left = (width - height) // 2\n",
-                "            top = 0\n",
-                "            right = left + height\n",
-                "            bottom = height\n",
-                "        else:\n",
-                "            top = (height - width) // 2\n",
-                "            left = 0\n",
-                "            bottom = top + width\n",
-                "            right = width\n",
-                "            \n",
-                "        # Get the center crop\n",
-                "        cropped = image.crop((left, top, right, bottom))\n",
-                "        \n",
-                "        # If the cropped image is still larger than 1024x1024, take the center 1024x1024\n",
-                "        if cropped.size[0] > 1024:\n",
-                "            size = cropped.size[0]\n",
-                "            margin = (size - 1024) // 2\n",
-                "            cropped = cropped.crop((margin, margin, margin + 1024, margin + 1024))\n",
-                "            \n",
-                "        return cropped\n",
-                "\n",
-                "    def process_image(self, image_url, save_path, index):\n",
-                "        try:\n",
-                "            response = requests.get(image_url, timeout=10)\n",
-                "            if response.status_code != 200:\n",
-                "                return False\n",
-                "\n",
-                "            # Open image and convert to RGB\n",
-                "            image = Image.open(BytesIO(response.content)).convert('RGB')\n",
-                "            width, height = image.size\n",
-                "\n",
-                "            # Skip if image is too small\n",
-                "            if width < 1200 or height < 1200:\n",
-                "                return False\n",
-                "\n",
-                "            # Crop center of the image to exactly 1024x1024\n",
-                "            cropped_image = self.crop_center(image)\n",
-                "            \n",
-                "            # Double check we have exactly 1024x1024\n",
-                "            if cropped_image.size != (1024, 1024):\n",
-                "                return False\n",
-                "\n",
-                "            # Generate unique filename\n",
-                "            image_hash = hashlib.md5(response.content).hexdigest()[:10]\n",
-                "            filename = f\"image_{index}_{image_hash}.jpg\"\n",
-                "            save_path = os.path.join(save_path, filename)\n",
-                "            \n",
-                "            # Save the image with high quality\n",
-                "            cropped_image.save(save_path, \"JPEG\", quality=95)\n",
-                "            print(f\"Saved {filename} (original size: {width}x{height})\")\n",
-                "            return True\n",
-                "\n",
-                "        except Exception as e:\n",
-                "            print(f\"Error processing image {image_url}: {str(e)}\")\n",
-                "            return False\n",
-                "\n",
-                "    def search_duckduckgo(self, keyword, max_results):\n",
-                "        image_urls = []\n",
-                "        try:\n",
-                "            with DDGS() as ddgs:\n",
-                "                results = ddgs.images(\n",
-                "                    keyword,\n",
-                "                    max_results=max_results * 3\n",
-                "                )\n",
-                "                for r in results:\n",
-                "                    if r['image']:\n",
-                "                        image_urls.append(r['image'])\n",
-                "        except Exception as e:\n",
-                "            print(f\"Error searching DuckDuckGo: {str(e)}\")\n",
-                "        return image_urls\n",
-                "\n",
-                "    def scrape_images(self, project_name, keyword, num_images):\n",
-                "        save_path = self.create_save_directory(project_name)\n",
-                "        print(f\"Saving images to: {save_path}\")\n",
-                "        print(\"Note: Only processing images larger than 1200x1200 pixels\")\n",
-                "        \n",
-                "        # Collect image URLs\n",
-                "        image_urls = self.search_duckduckgo(f\"buddhism {keyword}\", num_images * 3)\n",
-                "        print(f\"Found {len(image_urls)} potential images to process\")\n",
-                "\n",
-                "        # Process images with progress bar\n",
-                "        successful_downloads = 0\n",
-                "        with tqdm(total=num_images) as pbar:\n",
-                "            with ThreadPoolExecutor(max_workers=4) as executor:\n",
-                "                for i, url in enumerate(image_urls):\n",
-                "                    if successful_downloads >= num_images:\n",
-                "                        break\n",
-                "                        \n",
-                "                    if self.process_image(url, save_path, i):\n",
-                "                        successful_downloads += 1\n",
-                "                        pbar.update(1)\n",
-                "\n",
-                "        print(f\"Successfully downloaded {successful_downloads} images\")\n",
-                "        print(f\"Images are saved in: {save_path}\")\n",
-                "        return successful_downloads"
-            ]
-        },
-        {
-            "cell_type": "markdown",
-            "metadata": {},
-            "source": [
-                "## Run the Image Scraper\n",
-                "\n",
-                "Execute the cell below to start scraping images. The images will be saved to your Google Drive in the following structure:\n",
-                "```\n",
-                "Google Drive/\n",
-                "  └── Loras/\n",
-                "      └── [project_name]/\n",
-                "          └── dataset/\n",
-                "              └── images...\n",
-                "```"
-            ]
-        },
-        {
-            "cell_type": "code",
-            "metadata": {},
-            "execution_count": None,
-            "source": [
-                "# Initialize the scraper\n",
-                "scraper = ImageScraper()\n",
-                "\n",
-                "# Set your parameters\n",
-                "project_name = input(\"Enter project name (will be used as folder name): \")\n",
-                "keyword = input(\"Enter search keyword (will be combined with 'buddhism'): \")\n",
-                "num_images = int(input(\"Enter number of images to download: \"))\n",
-                "\n",
-                "# Start scraping\n",
-                "scraper.scrape_images(project_name, keyword, num_images)"
-            ]
-        }
-    ],
-    "metadata": {
-        "colab": {
-            "name": "Buddhist_Image_Scraper_LoRA.ipynb",
-            "provenance": [],
-            "collapsed_sections": []
-        },
-        "kernelspec": {
-            "name": "python3",
-            "display_name": "Python 3"
-        },
-        "language_info": {
-            "name": "python"
-        }
-    },
-    "nbformat": 4,
-    "nbformat_minor": 0
-}
+def create_notebook_from_image_scraper():
+    # Create a new notebook
+    nb = nbf.v4.new_notebook()
+    
+    # Title and description markdown cell
+    nb.cells.append(nbf.v4.new_markdown_cell("""
+# Human Image Scraper for Machine Learning Datasets
 
-# Save the notebook
-with open('Buddhist_Image_Scraper_LoRA.ipynb', 'w', encoding='utf-8') as f:
-    json.dump(notebook, f, indent=2) 
+This notebook allows you to scrape images of humans with various attributes to create training datasets.
+It has built-in face detection to center crops on faces, and produces 1024x1024 pixel images suitable for machine learning.
+All images are saved directly to your Google Drive in the structure: `/content/drive/MyDrive/Loras/[project_name]/dataset/`
+    """))
+    
+    # Installation cell
+    nb.cells.append(nbf.v4.new_code_cell("""
+# Check if running in Colab
+import sys
+IN_COLAB = 'google.colab' in sys.modules
+print(f"Running in Google Colab: {IN_COLAB}")
+
+# Mount Google Drive
+if IN_COLAB:
+    from google.colab import drive
+    drive.mount('/content/drive')
+    print("Google Drive mounted at /content/drive")
+
+# Install required packages
+!pip install -q requests
+!pip install -q Pillow
+!pip install -q google-api-python-client
+!pip install -q duckduckgo-search
+!pip install -q tqdm
+
+# Install face_recognition (more complex in Colab)
+if IN_COLAB:
+    !apt-get -qq install -y libsm6 libxext6 libxrender-dev libglib2.0-0
+    !pip install -q dlib
+    !pip install -q face_recognition
+else:
+    !pip install -q face_recognition
+
+!pip install -q numpy
+
+# Display versions for debugging
+!pip list | grep -E "requests|Pillow|google|duckduckgo|tqdm|face|numpy|dlib"
+    """))
+    
+    # Import cell
+    nb.cells.append(nbf.v4.new_code_cell("""
+import os
+import requests
+from PIL import Image
+from io import BytesIO
+from googleapiclient.discovery import build
+from duckduckgo_search import DDGS
+import time
+from tqdm import tqdm
+import hashlib
+from concurrent.futures import ThreadPoolExecutor
+import logging
+import face_recognition
+import numpy as np
+from google.colab import files
+    """))
+    
+    # Modify the class code to update the create_save_directory method
+    with open('image_scraper.py', 'r') as f:
+        content = f.read()
+    
+    # Replace the create_save_directory method in the content
+    modified_content = re.sub(
+        r'def create_save_directory\(self, save_folder\):.*?return save_folder',
+        """def create_save_directory(self, project_name):
+        # Create directory structure: Loras/project_name/dataset
+        save_path = os.path.join('/content/drive/MyDrive/Loras', project_name, 'dataset')
+        os.makedirs(save_path, exist_ok=True)
+        self.logger.info(f"Saving images to Google Drive path: {save_path}")
+        return save_path""",
+        content,
+        flags=re.DOTALL
+    )
+    
+    # Extract the modified ImageScraper class
+    class_match = re.search(r'class ImageScraper.*?(?=def main\(\)|$)', modified_content, re.DOTALL)
+    if class_match:
+        class_code = class_match.group(0)
+        # Fix indentation for notebook
+        class_code = "\n".join([line for line in class_code.split('\n')])
+        nb.cells.append(nbf.v4.new_code_cell(class_code))
+    
+    # Create an instance and run cell
+    nb.cells.append(nbf.v4.new_code_cell("""
+# Create an instance of the scraper
+scraper = ImageScraper()
+    """))
+    
+    # Input parameters cell - change save_folder to project_name
+    nb.cells.append(nbf.v4.new_code_cell("""
+# Set parameters for image scraping
+main_keyword = input("Enter main keyword (e.g., 'human'): ")
+sub_keywords = input("Enter sub-keywords separated by commas (e.g., 'profile, face, portrait'): ")
+project_name = input("Enter project name (folder will be created in Google Drive): ")
+num_images_per_keyword = int(input("Enter number of images to download per sub-keyword: "))
+    """))
+    
+    # Run scraper cell - update to use project_name
+    nb.cells.append(nbf.v4.new_code_cell("""
+# Run the scraper
+total_images = scraper.scrape_images(main_keyword, sub_keywords, project_name, num_images_per_keyword)
+print(f"Total images downloaded: {total_images}")
+print(f"Images saved to: /content/drive/MyDrive/Loras/{project_name}/dataset/")
+    """))
+    
+    # Write the notebook to a file
+    with open('Human_Image_Scraper_Colab.ipynb', 'w') as f:
+        nbf.write(nb, f)
+    
+    print("Notebook created successfully: Human_Image_Scraper_Colab.ipynb")
+
+if __name__ == "__main__":
+    create_notebook_from_image_scraper() 
