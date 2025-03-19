@@ -44,6 +44,40 @@ def setup_environment():
         except subprocess.CalledProcessError as e:
             print(f"Error installing packages: {e}")
             return False
+    elif python_version.major == 3 and python_version.minor >= 12:
+        # Python 3.12 compatibility fix
+        print("\nPython 3.12 detected. Using compatibility fixes...")
+        
+        # Clean up any potentially conflicting packages
+        print("Removing potentially conflicting packages...")
+        subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", 
+                       "numpy", "opencv-python", "opencv-python-headless", 
+                       "mediapipe", "duckduckgo_search", "setuptools"], 
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        
+        # First install a compatible setuptools version to fix the pkgutil.ImpImporter error
+        print("Installing compatible setuptools...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "setuptools==68.2.2"])
+        
+        # Install NumPy
+        print("Installing NumPy...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "numpy==1.26.0"])
+        
+        # Install basic dependencies
+        print("Installing basic dependencies...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", 
+                              "requests", "Pillow", "tqdm"])
+        
+        # Install OpenCV first, then mediapipe
+        print("Installing OpenCV...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "opencv-python-headless==4.8.0.76"])
+        
+        print("Installing MediaPipe...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "mediapipe==0.10.8"])
+        
+        # Install DuckDuckGo search
+        print("Installing DuckDuckGo search library...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "duckduckgo_search==3.9.6"])
     else:
         # Clean up any potentially conflicting packages
         print("Removing potentially conflicting packages...")
