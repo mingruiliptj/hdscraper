@@ -262,11 +262,6 @@ def run_scraper():
         def crop_around_face(self, image):
             """Crop image to 1024x1024 keeping faces centered using MediaPipe if available"""
             try:
-                # If mediapipe is not available, fall back to center crop
-                if not self.has_mediapipe:
-                    self.logger.debug("MediaPipe not available, using center crop")
-                    return self.crop_center(image)
-                
                 # Convert PIL Image to CV2 format
                 img_array = np.array(image)
                 
@@ -278,45 +273,57 @@ def run_scraper():
                 if len(img_array.shape) == 3 and img_array.shape[2] == 4:  # RGBA
                     img_array = img_array[:, :, :3]  # Drop alpha channel
                 
-                # Process with MediaPipe
-                results = face_detection.process(img_array)
-                
-                if not results.detections:
-                    # If no faces detected, fall back to center crop
-                    return self.crop_center(image)
+                # If mediapipe is available, try face detection
+                if self.has_mediapipe:
+                    # Process with MediaPipe
+                    results = face_detection.process(img_array)
                     
-                # Calculate the center point of all faces
-                height, width = img_array.shape[:2]
-                centers = []
+                    if results.detections:
+                        # Calculate the center point of all faces
+                        height, width = img_array.shape[:2]
+                        centers = []
+                        face_sizes = []
+                        
+                        for detection in results.detections:
+                            # Get bounding box
+                            bbox = detection.location_data.relative_bounding_box
+                            x = int(bbox.xmin * width)
+                            y = int(bbox.ymin * height)
+                            w = int(bbox.width * width)
+                            h = int(bbox.height * height)
+                            
+                            # Calculate center of face and face size
+                            center_x = x + w // 2
+                            center_y = y + h // 2
+                            face_size = max(w, h)
+                            centers.append((center_x, center_y))
+                            face_sizes.append(face_size)
+                        
+                        # Use the largest face as the primary target
+                        largest_face_idx = face_sizes.index(max(face_sizes))
+                        center_x, center_y = centers[largest_face_idx]
+                        face_size = face_sizes[largest_face_idx]
+                        
+                        # Calculate crop box ensuring face is centered
+                        img_width, img_height = image.size
+                        crop_size = max(1024, face_size * 2)  # Make sure we include enough context around the face
+                        
+                        # Ensure the crop box stays within image boundaries
+                        left = max(0, min(center_x - crop_size // 2, img_width - crop_size))
+                        top = max(0, min(center_y - crop_size // 2, img_height - crop_size))
+                        right = left + crop_size
+                        bottom = top + crop_size
+                        
+                        # Crop and resize to exactly 1024x1024
+                        cropped = image.crop((left, top, right, bottom))
+                        if crop_size != 1024:
+                            cropped = cropped.resize((1024, 1024), Image.LANCZOS)
+                        return cropped
                 
-                for detection in results.detections:
-                    # Get bounding box
-                    bbox = detection.location_data.relative_bounding_box
-                    x = int(bbox.xmin * width)
-                    y = int(bbox.ymin * height)
-                    w = int(bbox.width * width)
-                    h = int(bbox.height * height)
-                    
-                    # Calculate center of face
-                    center_x = x + w // 2
-                    center_y = y + h // 2
-                    centers.append((center_x, center_y))
-                    
-                # Use the average center point of all faces
-                center_x = int(sum(x for x, _ in centers) / len(centers))
-                center_y = int(sum(y for _, y in centers) / len(centers))
+                # If no faces detected or mediapipe not available, fall back to center crop
+                self.logger.debug("No faces detected or MediaPipe not available, using center crop")
+                return self.crop_center(image)
                 
-                # Calculate crop box
-                img_width, img_height = image.size
-                crop_size = 1024
-                
-                # Ensure the crop box stays within image boundaries
-                left = max(0, min(center_x - crop_size // 2, img_width - crop_size))
-                top = max(0, min(center_y - crop_size // 2, img_height - crop_size))
-                right = left + crop_size
-                bottom = top + crop_size
-                
-                return image.crop((left, top, right, bottom))
             except Exception as e:
                 self.logger.error(f"Error in face detection: {e}")
                 return self.crop_center(image)
@@ -331,13 +338,27 @@ def run_scraper():
                 image = Image.open(BytesIO(response.content)).convert('RGB')
                 width, height = image.size
 
-                # Skip if image is too small
+                # First try to find faces in the original image
+                cropped_image = self.crop_around_face(image)
+                
+                # If face detection and cropping succeeded and gave us 1024x1024
+                if cropped_image.size == (1024, 1024):
+                    # Generate unique filename based on image content
+                    image_hash = hashlib.md5(response.content).hexdigest()[:10]
+                    filename = f"image_{index}_{image_hash}.jpg"
+                    full_save_path = os.path.join(save_path, filename)
+                    
+                    # Save the image with high quality
+                    cropped_image.save(full_save_path, "JPEG", quality=95)
+                    self.logger.info(f"Saved face-centered image {filename} (original size: {width}x{height})")
+                    return True
+
+                # If the image is too small or face detection failed, try resizing and cropping
                 if width < 1024 or height < 1024:
                     self.logger.debug(f"Skipping small image {width}x{height}: {image_url}")
                     return False
 
                 # Resize image while maintaining aspect ratio
-                # Make sure the smaller dimension is at least 1024px
                 if width < height:
                     new_width = 1024
                     new_height = int(height * (new_width / width))
@@ -345,10 +366,10 @@ def run_scraper():
                     new_height = 1024
                     new_width = int(width * (new_height / height))
                     
-                image = self.resize_keeping_aspect_ratio(image, (new_width, new_height))
-
-                # Crop around face to exactly 1024x1024
-                cropped_image = self.crop_around_face(image)
+                resized_image = self.resize_keeping_aspect_ratio(image, (new_width, new_height))
+                
+                # Try face detection again on resized image
+                cropped_image = self.crop_around_face(resized_image)
                 
                 # Verify final size
                 if cropped_image.size != (1024, 1024):
