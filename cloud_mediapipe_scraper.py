@@ -73,7 +73,7 @@ def setup_environment():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "opencv-python-headless==4.8.0.76"])
         
         print("Installing MediaPipe...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "mediapipe==0.10.8"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "mediapipe==0.10.13"])
         
         # Install DuckDuckGo search
         print("Installing DuckDuckGo search library...")
@@ -100,7 +100,7 @@ def setup_environment():
         subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "opencv-python-headless==4.8.0.76"])
         
         print("Installing MediaPipe...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "mediapipe==0.10.8"])
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "mediapipe==0.10.13"])
         
         # Install DuckDuckGo search
         print("Installing DuckDuckGo search library...")
