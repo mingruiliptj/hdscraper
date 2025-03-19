@@ -328,7 +328,7 @@ def run_scraper():
                 self.logger.error(f"Error in face detection: {e}")
                 return self.crop_center(image)
 
-        def process_image(self, image_url, save_path, index):
+        def process_image(self, image_url, save_path, index, keyword_hash):
             try:
                 response = requests.get(image_url, timeout=10)
                 if response.status_code != 200:
@@ -338,52 +338,27 @@ def run_scraper():
                 image = Image.open(BytesIO(response.content)).convert('RGB')
                 width, height = image.size
 
-                # First try to find faces in the original image
-                cropped_image = self.crop_around_face(image)
-                
-                # If face detection and cropping succeeded and gave us 1024x1024
-                if cropped_image.size == (1024, 1024):
-                    # Generate unique filename based on image content
-                    image_hash = hashlib.md5(response.content).hexdigest()[:10]
-                    filename = f"image_{index}_{image_hash}.jpg"
-                    full_save_path = os.path.join(save_path, filename)
-                    
-                    # Save the image with high quality
-                    cropped_image.save(full_save_path, "JPEG", quality=95)
-                    self.logger.info(f"Saved face-centered image {filename} (original size: {width}x{height})")
-                    return True
-
-                # If the image is too small or face detection failed, try resizing and cropping
+                # Skip if original image is too small
                 if width < 1024 or height < 1024:
                     self.logger.debug(f"Skipping small image {width}x{height}: {image_url}")
                     return False
 
-                # Resize image while maintaining aspect ratio
-                if width < height:
-                    new_width = 1024
-                    new_height = int(height * (new_width / width))
-                else:
-                    new_height = 1024
-                    new_width = int(width * (new_height / height))
-                    
-                resized_image = self.resize_keeping_aspect_ratio(image, (new_width, new_height))
+                # Try to find faces in the original image
+                cropped_image = self.crop_around_face(image)
                 
-                # Try face detection again on resized image
-                cropped_image = self.crop_around_face(resized_image)
-                
-                # Verify final size
+                # Skip if cropped image is not exactly 1024x1024
                 if cropped_image.size != (1024, 1024):
-                    self.logger.error(f"Unexpected crop size {cropped_image.size}")
+                    self.logger.debug(f"Skipping image with incorrect crop size {cropped_image.size}: {image_url}")
                     return False
 
-                # Generate unique filename based on image content
+                # Generate unique filename based on image content and keyword hash
                 image_hash = hashlib.md5(response.content).hexdigest()[:10]
-                filename = f"image_{index}_{image_hash}.jpg"
+                filename = f"img_{keyword_hash}_{index}_{image_hash}.jpg"
                 full_save_path = os.path.join(save_path, filename)
                 
                 # Save the image with high quality
                 cropped_image.save(full_save_path, "JPEG", quality=95)
-                self.logger.info(f"Saved image {filename} (original size: {width}x{height})")
+                self.logger.info(f"Saved face-centered image {filename} (original size: {width}x{height})")
                 return True
 
             except Exception as e:
@@ -444,6 +419,9 @@ def run_scraper():
             for sub_keyword in sub_keyword_list:
                 if not sub_keyword:
                     continue
+                
+                # Create a short hash for the keyword to use in filenames
+                keyword_hash = hashlib.md5(sub_keyword.encode('utf-8')).hexdigest()[:6]
                     
                 search_query = f"{main_keyword} {sub_keyword}"
                 self.logger.info(f"Searching for: {search_query}")
@@ -460,7 +438,7 @@ def run_scraper():
                         if successful_downloads >= num_images_per_keyword:
                             break
                             
-                        if self.process_image(url, save_path, f"{sub_keyword}_{i}"):
+                        if self.process_image(url, save_path, f"{i:03d}", keyword_hash):
                             successful_downloads += 1
                             total_successful_downloads += 1
                             pbar.update(1)
