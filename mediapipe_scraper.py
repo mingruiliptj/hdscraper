@@ -115,9 +115,10 @@ def run_scraper():
     )
     
     class ImageScraper:
-        def __init__(self):
+        def __init__(self, enable_img_resize=True):
             self.target_size = (1024, 1024)
             self.setup_logging()
+            self.enable_img_resize = enable_img_resize
 
         def setup_logging(self):
             logging.basicConfig(
@@ -245,24 +246,27 @@ def run_scraper():
                     self.logger.debug(f"Skipping small image {width}x{height}: {image_url}")
                     return False
 
-                # Resize image while maintaining aspect ratio
-                # Make sure the smaller dimension is at least 1024px
-                if width < height:
-                    new_width = 1024
-                    new_height = int(height * (new_width / width))
-                else:
-                    new_height = 1024
-                    new_width = int(width * (new_height / height))
-                    
-                image = self.resize_keeping_aspect_ratio(image, (new_width, new_height))
+            
+                # Crop around face to exactly 1024x1024 if enabled
+                if self.enable_img_resize:
 
-                # Crop around face to exactly 1024x1024
-                cropped_image = self.crop_around_face(image)
-                
-                # Verify final size
-                if cropped_image.size != (1024, 1024):
-                    self.logger.error(f"Unexpected crop size {cropped_image.size}")
-                    return False
+                    # Resize image while maintaining aspect ratio
+                    # Make sure the smaller dimension is at least 1024px
+                    if width < height:
+                        new_width = 1024
+                        new_height = int(height * (new_width / width))
+                    else:
+                        new_height = 1024
+                        new_width = int(width * (new_height / height))
+                    image = self.resize_keeping_aspect_ratio(image, (new_width, new_height))
+
+                    cropped_image = self.crop_around_face(image)
+                    
+                    # Verify final size
+                    if cropped_image.size != (1024, 1024):
+                        self.logger.error(f"Unexpected crop size {cropped_image.size}")
+                else:
+                    cropped_image = image
 
                 # Generate unique filename based on image content
                 image_hash = hashlib.md5(response.content).hexdigest()[:10]
@@ -340,18 +344,22 @@ def run_scraper():
     print("Images will be saved to your Google Drive in Loras/[project_name]/dataset/")
     print("=" * 80)
     
-    # Initialize the scraper
-    scraper = ImageScraper()
-    
     # Set your parameters
     main_keyword = input("Enter main keyword (e.g., 'human'): ")
     sub_keywords = input("Enter sub-keywords separated by commas (e.g., 'profile, face, portrait'): ")
     project_name = input("Enter project name (folder will be created in Google Drive): ")
     num_images_per_keyword = int(input("Enter number of images to download per sub-keyword: "))
-    
+
+    # Ask user whether to enable cropping
+    crop_choice = input("Enable image resizing? ('yes' or 'no'): ")
+    enable_img_resize = crop_choice.lower() == 'yes'
+
+    # Initialize the scraper
+    scraper = ImageScraper(enable_img_resize=enable_img_resize)
+
     # Start scraping
     scraper.scrape_images(main_keyword, sub_keywords, project_name, num_images_per_keyword)
-    
+
     print(f"\nImages saved to: /content/drive/MyDrive/Loras/{project_name}/dataset/")
     return True
 
@@ -367,4 +375,4 @@ if __name__ == "__main__":
     elif choice == "2":
         run_scraper()
     else:
-        print("Invalid choice. Please enter 1 or 2.") 
+        print("Invalid choice. Please enter 1 or 2.")

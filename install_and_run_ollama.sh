@@ -105,3 +105,7 @@ echo "Ollama is installed and running."
 echo "To test the model, run this command in another terminal:"
 echo "curl -X POST http://localhost:11434/api/chat -d '{\"model\": \"$MODEL_URL\", \"messages\": [{\"role\": \"user\", \"content\": \"Hello, how are you?\"}]}'"
 echo "Or connect remotely using the instance's external IP: http://<EXTERNAL_IP>:11434"
+
+
+
+OLLAMA_HOST=0.0.0.0:11434 OLLAMA_ORIGINS="*"  ollama run huihui_ai/deepseek-r1-abliterated:14b
