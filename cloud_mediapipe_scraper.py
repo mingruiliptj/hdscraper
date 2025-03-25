@@ -330,8 +330,19 @@ def run_scraper():
 
         def process_image(self, image_url, save_path, index, keyword_hash, image_processing_mode):
             try:
-                response = requests.get(image_url, timeout=10)
+                response = requests.get(image_url, timeout=30)
                 if response.status_code != 200:
+                    return False
+                
+                # Generate unique filename based on image hash
+                # image hash is used to skip duplicate files
+                image_hash = hashlib.md5(response.content).hexdigest()[:10]
+                filename = f"img_{image_hash}.jpg"
+                full_save_path = os.path.join(save_path, filename)
+
+                # Check for duplicates
+                if os.path.exists(full_save_path):
+                    self.logger.info(f"Skipping duplicate image: {filename}")
                     return False
 
                 # Open image and convert to RGB
@@ -353,11 +364,7 @@ def run_scraper():
                         processed_image, self.target_size
                     )
                     
-                # Generate unique filename based on image content and keyword hash
-                image_hash = hashlib.md5(response.content).hexdigest()[:10]
-                filename = f"img_{keyword_hash}_{index}_{image_hash}.jpg"
-                full_save_path = os.path.join(save_path, filename)
-
+               
                 # Save the image
                 processed_image.save(full_save_path, "JPEG", quality=95)
                 self.logger.info(f"Saved image {filename} (original size: {width}x{height})")
