@@ -328,7 +328,7 @@ def run_scraper():
                 self.logger.error(f"Error in face detection: {e}")
                 return self.crop_center(image)
 
-        def process_image(self, image_url, save_path, index, keyword_hash):
+        def process_image(self, image_url, save_path, index, keyword_hash, image_processing_mode):
             try:
                 response = requests.get(image_url, timeout=10)
                 if response.status_code != 200:
@@ -343,22 +343,24 @@ def run_scraper():
                     self.logger.debug(f"Skipping small image {width}x{height}: {image_url}")
                     return False
 
-                # Try to find faces in the original image
-                cropped_image = self.crop_around_face(image)
-                
-                # Skip if cropped image is not exactly 1024x1024
-                if cropped_image.size != (1024, 1024):
-                    self.logger.debug(f"Skipping image with incorrect crop size {cropped_image.size}: {image_url}")
-                    return False
+                processed_image = image
 
+                if "crop" in image_processing_mode:
+                    processed_image = self.crop_around_face(processed_image)
+
+                if "resize" in image_processing_mode:
+                    processed_image = self.resize_keeping_aspect_ratio(
+                        processed_image, self.target_size
+                    )
+                    
                 # Generate unique filename based on image content and keyword hash
                 image_hash = hashlib.md5(response.content).hexdigest()[:10]
                 filename = f"img_{keyword_hash}_{index}_{image_hash}.jpg"
                 full_save_path = os.path.join(save_path, filename)
-                
-                # Save the image with high quality
-                cropped_image.save(full_save_path, "JPEG", quality=95)
-                self.logger.info(f"Saved face-centered image {filename} (original size: {width}x{height})")
+
+                # Save the image
+                processed_image.save(full_save_path, "JPEG", quality=95)
+                self.logger.info(f"Saved image {filename} (original size: {width}x{height})")
                 return True
 
             except Exception as e:
@@ -403,7 +405,7 @@ def run_scraper():
                     self.logger.error(f"Alternative method also failed: {str(e2)}")
             return image_urls
 
-        def scrape_images(self, main_keyword, sub_keywords, project_name, num_images_per_keyword):
+        def scrape_images(self, main_keyword, sub_keywords, project_name, num_images_per_keyword, image_processing_mode):
             """
             Main function to scrape and process images
             """
@@ -437,8 +439,8 @@ def run_scraper():
                     for i, url in enumerate(image_urls):
                         if successful_downloads >= num_images_per_keyword:
                             break
-                            
-                        if self.process_image(url, save_path, f"{i:03d}", keyword_hash):
+                    
+                        if self.process_image(url, save_path, f"{i:03d}", keyword_hash, image_processing_mode):
                             successful_downloads += 1
                             total_successful_downloads += 1
                             pbar.update(1)
@@ -476,13 +478,24 @@ def run_scraper():
     project_name = input("Enter project name (folder will be created in Google Drive): ")
     
     try:
-        num_images_per_keyword = int(input("Enter number of images to download per sub-keyword: "))
+        num_images_per_keyword = int(input("Enter number of images to download per sub-keyword: **default=100"))
     except ValueError:
-        print("Invalid number. Using default of 10 images per keyword.")
-        num_images_per_keyword = 10
+        print("Using default of 100 images per keyword.")
+        num_images_per_keyword = 100
+
+    # Prompt for image processing mode
+    print("\nChoose image processing mode:")
+    print("  'none': No processing ***default")
+    print("  'resize': Resize images to 1024x1024, keeping aspect ratio")
+    print("  'crop': Crop images to 1024x1024, centering around faces")
+    print("  'resize,crop': Resize and then crop")
+    image_processing_mode = input("Enter processing mode (none, resize, crop, resize,crop - default resize,crop): ")
     
+    if not image_processing_mode:
+      image_processing_mode = "none" # set default value
+
     # Start scraping
-    scraper.scrape_images(main_keyword, sub_keywords, project_name, num_images_per_keyword)
+    scraper.scrape_images(main_keyword, sub_keywords, project_name, num_images_per_keyword, image_processing_mode)
     
     print(f"\nImages saved to: ~/google-drive/Loras/{project_name}/dataset/")
     return True
@@ -499,4 +512,4 @@ if __name__ == "__main__":
     elif choice == "2":
         run_scraper()
     else:
-        print("Invalid choice. Please enter 1 or 2.") 
+        print("Invalid choice. Please enter 1 or 2.")
